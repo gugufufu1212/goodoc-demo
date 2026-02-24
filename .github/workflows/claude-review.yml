@@ -1,0 +1,69 @@
+name: Claude Code Review
+
+on:
+  # PR 생성/업데이트 시 자동 리뷰
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+  # PR 댓글에서 @claude 멘션 시 on-demand 리뷰
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  # ── 자동 리뷰: PR이 열리거나 커밋이 추가될 때 ──────────────────────────
+  auto-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 5"
+          prompt: |
+            이 PR을 아래 관점에서 한국어로 코드리뷰 해줘.
+
+            ## 프로젝트 컨텍스트
+            - Java 17 + Spring Boot 3.2 기반 병원 예약 API
+            - 레이어: Controller → Service → Repository (JPA)
+            - 에러 처리: GlobalExceptionHandler (IllegalArgumentException=404, IllegalStateException=409)
+            - DTO 변환: 정적 팩토리 메서드 `Response.from(entity)` 패턴 사용
+
+            ## 리뷰 체크리스트
+            1. **버그 및 로직 오류**: 예약 상태 전환, null 처리, 경계 조건
+            2. **보안**: SQL Injection, 입력값 검증 누락, 민감 정보 노출
+            3. **레이어 분리**: 비즈니스 로직이 Controller에 있지 않은지
+            4. **트랜잭션**: 쓰기 작업에 @Transactional 누락 여부
+            5. **코드 품질**: 중복 코드, 가독성, 네이밍 컨벤션
+            6. **확장성**: 굿닥 서비스 확장(병원/의사 도메인, 인증) 관점에서 설계 문제
+
+            ## 출력 형식
+            - 심각도별로 구분: 🔴 필수 수정 / 🟡 개선 권장 / 🟢 좋은 점
+            - 각 항목에 파일명과 라인 번호 포함
+            - 수정이 필요한 경우 수정 예시 코드 제시
+
+  # ── On-demand 리뷰: 댓글에서 @claude 멘션 시 ─────────────────────────
+  on-demand-review:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          trigger_phrase: "@claude"
+          claude_args: "--max-turns 10"

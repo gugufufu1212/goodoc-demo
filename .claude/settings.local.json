@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(chmod +x /Users/gugufufu/goodoc-demo/mvnw)"
+      "Bash(chmod +x /Users/gugufufu/goodoc-demo/mvnw)",
+      "WebSearch"
     ]
   }
 }
