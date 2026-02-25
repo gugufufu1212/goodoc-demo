@@ -48,7 +48,7 @@ public class AppointmentService {
     }
 
     @Transactional
-    public AppointmentResponse cancelAppointment(Long id) {
+    public AppointmentResponse cancelAppointment(Long id, String reason) {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다. id=" + id));
 
@@ -57,6 +57,7 @@ public class AppointmentService {
         }
 
         appointment.setStatus(Appointment.AppointmentStatus.CANCELLED);
+        appointment.setCancelReason(reason);
         return AppointmentResponse.from(appointment);
     }
 }

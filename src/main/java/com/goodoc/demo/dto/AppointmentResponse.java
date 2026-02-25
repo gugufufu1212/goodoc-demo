@@ -12,6 +12,7 @@ public class AppointmentResponse {
     private LocalDateTime appointmentDate;
     private String status;
     private LocalDateTime createdAt;
+    private String cancelReason;
 
     public static AppointmentResponse from(Appointment appointment) {
         AppointmentResponse response = new AppointmentResponse();
@@ -22,6 +23,7 @@ public class AppointmentResponse {
         response.appointmentDate = appointment.getAppointmentDate();
         response.status = appointment.getStatus().name();
         response.createdAt = appointment.getCreatedAt();
+        response.cancelReason = appointment.getCancelReason();
         return response;
     }
 
@@ -33,4 +35,5 @@ public class AppointmentResponse {
     public LocalDateTime getAppointmentDate() { return appointmentDate; }
     public String getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public String getCancelReason() { return cancelReason; }
 }

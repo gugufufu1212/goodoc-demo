@@ -30,6 +30,8 @@ public class Appointment {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    private String cancelReason;
+
     public enum AppointmentStatus {
         PENDING, CONFIRMED, CANCELLED
     }
@@ -62,4 +64,7 @@ public class Appointment {
     public void setStatus(AppointmentStatus status) { this.status = status; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public String getCancelReason() { return cancelReason; }
+    public void setCancelReason(String cancelReason) { this.cancelReason = cancelReason; }
 }

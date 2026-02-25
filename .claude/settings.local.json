@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(chmod +x /Users/gugufufu/goodoc-demo/mvnw)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(./mvnw compile -q 2>&1)"
     ]
   }
 }
