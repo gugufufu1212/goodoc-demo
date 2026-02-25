@@ -26,7 +26,6 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: "--max-turns 5"
           prompt: |
             이 PR을 아래 관점에서 한국어로 코드리뷰 해줘.
@@ -66,6 +65,5 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           trigger_phrase: "@claude"
           claude_args: "--max-turns 10"
