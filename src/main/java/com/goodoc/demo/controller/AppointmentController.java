@@ -1,6 +1,7 @@
 package com.goodoc.demo.controller;
 
 import com.goodoc.demo.dto.AppointmentRequest;
+import com.goodoc.demo.dto.AppointmentRescheduleRequest;
 import com.goodoc.demo.dto.AppointmentResponse;
 import com.goodoc.demo.service.AppointmentService;
 import jakarta.validation.Valid;
@@ -41,6 +42,15 @@ public class AppointmentController {
             @RequestParam(required = false) String patientName) {
         List<AppointmentResponse> responses = appointmentService.getAllAppointments(patientName);
         return ResponseEntity.ok(responses);
+    }
+
+    // 예약 날짜 변경
+    @PatchMapping("/{id}/reschedule")
+    public ResponseEntity<AppointmentResponse> rescheduleAppointment(
+            @PathVariable Long id,
+            @Valid @RequestBody AppointmentRescheduleRequest request) {
+        AppointmentResponse response = appointmentService.rescheduleAppointment(id, request);
+        return ResponseEntity.ok(response);
     }
 
     // 예약 취소

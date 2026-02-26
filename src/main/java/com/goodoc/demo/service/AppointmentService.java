@@ -1,6 +1,7 @@
 package com.goodoc.demo.service;
 
 import com.goodoc.demo.dto.AppointmentRequest;
+import com.goodoc.demo.dto.AppointmentRescheduleRequest;
 import com.goodoc.demo.dto.AppointmentResponse;
 import com.goodoc.demo.entity.Appointment;
 import com.goodoc.demo.repository.AppointmentRepository;
@@ -45,6 +46,19 @@ public class AppointmentService {
         return appointments.stream()
                 .map(AppointmentResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public AppointmentResponse rescheduleAppointment(Long id, AppointmentRescheduleRequest request) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다. id=" + id));
+
+        if (appointment.getStatus() == Appointment.AppointmentStatus.CANCELLED) {
+            throw new IllegalStateException("취소된 예약은 변경할 수 없습니다. id=" + id);
+        }
+
+        appointment.setAppointmentDate(request.getAppointmentDate());
+        return AppointmentResponse.from(appointment);
     }
 
     @Transactional
