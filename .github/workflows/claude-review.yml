@@ -33,7 +33,9 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
+          github_token: ${{ github.token }}
           claude_args: "--max-turns 5"
+          show_full_output: "true"
           prompt: |
             이 PR을 아래 관점에서 한국어로 코드리뷰 해줘.
 
@@ -79,5 +81,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
+          github_token: ${{ github.token }}
           trigger_phrase: "@claude"
           claude_args: "--max-turns 10"
+          show_full_output: "true"
