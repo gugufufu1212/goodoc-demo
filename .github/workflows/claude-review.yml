@@ -34,8 +34,9 @@ jobs:
         with:
           use_bedrock: "true"
           github_token: ${{ github.token }}
-          claude_args: "--max-turns 5"
+          claude_args: "--max-turns 10"
           show_full_output: "true"
+          settings: '{"permissions":{"allow":["Bash(gh *)","Bash(git log*)","Bash(git diff*)","Bash(git show*)","Bash(git fetch*)"],"deny":[]}}'
           prompt: |
             이 PR을 아래 관점에서 한국어로 코드리뷰하고, 리뷰 결과를 PR 댓글로 작성해줘.
 
