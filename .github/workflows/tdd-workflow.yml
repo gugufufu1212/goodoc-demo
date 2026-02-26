@@ -1,0 +1,414 @@
+name: Multi-Agent TDD Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature_description:
+        description: '구현할 기능 설명 (상세히 작성할수록 결과가 좋습니다)'
+        required: true
+        type: string
+      branch_name:
+        description: '생성할 브랜치 이름 (예: feature/add-hospital-search)'
+        required: true
+        type: string
+
+jobs:
+  tdd-workflow:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      # ── 초기 설정 ──────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Setup Git & Branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin \
+            https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          chmod +x mvnw
+          git checkout -b ${{ inputs.branch_name }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # ════════════════════════════════════════════════════════════════
+      # ROUND 1
+      # ════════════════════════════════════════════════════════════════
+
+      - name: "[R1] Developer - 구현"
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 30"
+          settings: '{"permissions":{"allow":["Bash"],"deny":[]}}'
+          prompt: |
+            # TDD 개발 에이전트 — Round 1/3
+
+            ## 구현 요청
+            ${{ inputs.feature_description }}
+
+            ## 프로젝트 구조 (src/main/java/com/goodoc/demo/)
+            - controller/   : @RestController, HTTP 처리만
+            - service/      : 비즈니스 로직, @Transactional 관리
+            - repository/   : Spring Data JPA Interface
+            - entity/       : JPA @Entity
+            - dto/          : Request/Response DTO
+            - exception/    : GlobalExceptionHandler (기존 유지)
+
+            ## 필수 코드 컨벤션
+            - Controller: HTTP만 처리, 비즈니스 로직은 Service로
+            - Service: 클래스에 @Transactional(readOnly=true), 쓰기 메서드만 @Transactional
+            - DTO: Response.from(entity) 정적 팩토리 패턴 사용
+            - 에러: IllegalArgumentException → 404, IllegalStateException → 409
+            - GlobalExceptionHandler가 이미 처리하므로 try-catch 불필요
+            - Lombok 미사용, getter/setter 직접 작성
+            - Bean Validation (@NotNull, @NotBlank 등) 필수 필드에 적용
+
+            ## 지시사항
+            1. 기존 코드 파악:
+               - ls src/main/java/com/goodoc/demo/
+               - 연관 파일들 확인
+            2. 요청 기능에 필요한 파일 생성/수정 (Entity, DTO, Repository, Service, Controller)
+            3. 컴파일 확인: ./mvnw compile -q
+               - 실패 시 오류 확인 후 수정, 재실행
+               - 반드시 컴파일 통과 후 진행
+            4. 변경된 구현 파일만 커밋:
+               git add src/main/ && git commit -m "feat: [R1] <기능 한줄 요약>"
+
+      - name: "[R1] Run Tests"
+        id: test_r1
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./mvnw test 2>&1 | tee test-output-r1.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: "[R1] Validator - 테스트 작성 및 검증"
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 30"
+          settings: '{"permissions":{"allow":["Bash"],"deny":[]}}'
+          prompt: |
+            # TDD 검증 에이전트 — Round 1/3
+
+            ## 현재 테스트 결과
+            - exit_code: ${{ steps.test_r1.outputs.exit_code }} (0=성공)
+            - 상세 내용: cat test-output-r1.txt
+
+            ## 지시사항
+
+            ### 1단계: 기존 상태 파악
+            - cat test-output-r1.txt 로 현재 테스트 결과 확인
+            - git log --oneline -5 로 개발자 커밋 확인
+            - 신규/수정된 src/main/ 파일들 읽어 구현 내용 파악
+
+            ### 2단계: 테스트 시나리오 작성
+            src/test/java/com/goodoc/demo/ 아래에 테스트 파일 작성:
+            - @SpringBootTest + MockMvc 활용 (spring-boot-starter-test 사용 가능)
+            - 반드시 포함할 케이스:
+              * 정상 케이스 (201/200 응답)
+              * 잘못된 입력 (400 Bad Request — Bean Validation 검증)
+              * 존재하지 않는 ID (404 — IllegalArgumentException)
+              * 중복/상태 오류 (409 — IllegalStateException)
+            - 각 엔드포인트당 최소 3개 이상 테스트
+
+            ### 3단계: 테스트 실행 및 수정
+            - ./mvnw test 실행
+            - 실패 시 테스트 코드 수정 후 재실행 (구현 코드 수정은 최소화)
+            - 최대 3회 재시도
+
+            ### 4단계: 코드 품질 리뷰
+            구현 코드에서 다음 항목 검토:
+            - [ ] Controller에 비즈니스 로직 없는지
+            - [ ] @Transactional 올바른 사용 (readOnly=true 기본)
+            - [ ] IllegalArgumentException=404, IllegalStateException=409 준수
+            - [ ] Response.from(entity) 패턴 사용
+            - [ ] Bean Validation 적용
+
+            ### 5단계: 결과 파일 작성
+            tdd-feedback.md 파일 작성 (다음 라운드 개발자가 읽을 파일):
+            ```
+            # Round 1 검증 결과
+
+            ## 테스트 결과: PASS/FAIL
+            ### 실패한 테스트: (있을 경우 목록)
+
+            ## 코드 품질 이슈
+            ### (각 이슈를 구체적인 파일/라인 정보와 함께)
+
+            ## 수정 지시사항 (다음 라운드 개발자에게)
+            ### (구체적으로 무엇을 어떻게 수정해야 하는지)
+            ```
+
+            tdd-verdict.txt 작성:
+            - 모든 테스트 통과 + 품질 이슈 없음: 첫 줄에 정확히 "PASS" (따옴표 없이)
+            - 그 외: 첫 줄에 "FAIL: <이유 한줄>" 형식
+
+            ### 6단계: 커밋
+            git add src/test/ tdd-feedback.md tdd-verdict.txt && \
+            git commit -m "test: [R1] 테스트 시나리오 추가 및 검증 결과"
+
+      - name: "[R1] Check"
+        id: check_r1
+        run: |
+          verdict=$(head -1 tdd-verdict.txt 2>/dev/null || echo "FAIL: verdict 파일 없음")
+          echo "verdict=${verdict}" >> $GITHUB_OUTPUT
+          if [[ "${verdict}" == "PASS" ]]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ════════════════════════════════════════════════════════════════
+      # ROUND 2  (Round 1 실패 시)
+      # ════════════════════════════════════════════════════════════════
+
+      - name: "[R2] Developer - 수정"
+        if: steps.check_r1.outputs.passed != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 30"
+          settings: '{"permissions":{"allow":["Bash"],"deny":[]}}'
+          prompt: |
+            # TDD 개발 에이전트 — Round 2/3 (수정)
+
+            Round 1 판정: ${{ steps.check_r1.outputs.verdict }}
+
+            ## 지시사항
+            1. git log --oneline -10 으로 현재까지 커밋 확인
+            2. cat tdd-feedback.md 로 상세 피드백 확인
+            3. 피드백의 모든 수정 지시사항 적용:
+               - 코드 품질 이슈 수정
+               - 테스트 실패 원인이 구현 버그라면 수정
+            4. ./mvnw compile -q 컴파일 확인
+            5. git add src/main/ && git commit -m "fix: [R2] 검증 피드백 반영"
+
+      - name: "[R2] Run Tests"
+        if: steps.check_r1.outputs.passed != 'true'
+        id: test_r2
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./mvnw test 2>&1 | tee test-output-r2.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: "[R2] Validator - 재검증"
+        if: steps.check_r1.outputs.passed != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 20"
+          settings: '{"permissions":{"allow":["Bash"],"deny":[]}}'
+          prompt: |
+            # TDD 검증 에이전트 — Round 2/3 (재검증)
+
+            exit_code: ${{ steps.test_r2.outputs.exit_code }} (0=성공)
+
+            ## 지시사항
+            1. cat test-output-r2.txt 로 테스트 결과 확인
+            2. cat tdd-feedback.md 로 Round 1 피드백 확인
+               - Round 1에서 지적한 이슈가 수정됐는지 검토
+            3. 테스트 실패가 테스트 코드 문제라면 테스트 수정 후 ./mvnw test 재실행
+            4. 코드 품질 재검토 (Round 1과 동일 체크리스트)
+            5. tdd-feedback.md 에 Round 2 결과 추가:
+               ```
+               ---
+               # Round 2 검증 결과
+               ## 수정 반영 여부: (Round 1 이슈 해결됐는지)
+               ## 잔여 이슈: (있을 경우)
+               ## 수정 지시사항: (다음 라운드용)
+               ```
+            6. tdd-verdict.txt 덮어쓰기: "PASS" 또는 "FAIL: <이유>"
+            7. 변경사항 커밋:
+               git add src/test/ tdd-feedback.md tdd-verdict.txt && \
+               git commit -m "test: [R2] 재검증 결과" --allow-empty
+
+      - name: "[R2] Check"
+        if: steps.check_r1.outputs.passed != 'true'
+        id: check_r2
+        run: |
+          verdict=$(head -1 tdd-verdict.txt 2>/dev/null || echo "FAIL: verdict 파일 없음")
+          echo "verdict=${verdict}" >> $GITHUB_OUTPUT
+          if [[ "${verdict}" == "PASS" ]]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ════════════════════════════════════════════════════════════════
+      # ROUND 3  (Round 2 실패 시)
+      # ════════════════════════════════════════════════════════════════
+
+      - name: "[R3] Developer - 최종 수정"
+        if: steps.check_r1.outputs.passed != 'true' && steps.check_r2.outputs.passed != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 30"
+          settings: '{"permissions":{"allow":["Bash"],"deny":[]}}'
+          prompt: |
+            # TDD 개발 에이전트 — Round 3/3 (최종 수정)
+
+            Round 1: ${{ steps.check_r1.outputs.verdict }}
+            Round 2: ${{ steps.check_r2.outputs.verdict }}
+
+            ## 지시사항
+            1. cat tdd-feedback.md 로 누적 피드백 전체 확인
+            2. 미해결 이슈 모두 수정 (마지막 기회)
+            3. ./mvnw compile -q 확인
+            4. git add src/main/ && git commit -m "fix: [R3] 최종 수정"
+
+      - name: "[R3] Run Tests"
+        if: steps.check_r1.outputs.passed != 'true' && steps.check_r2.outputs.passed != 'true'
+        id: test_r3
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./mvnw test 2>&1 | tee test-output-r3.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: "[R3] Validator - 최종 검증"
+        if: steps.check_r1.outputs.passed != 'true' && steps.check_r2.outputs.passed != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 20"
+          settings: '{"permissions":{"allow":["Bash"],"deny":[]}}'
+          prompt: |
+            # TDD 검증 에이전트 — Round 3/3 (최종)
+
+            exit_code: ${{ steps.test_r3.outputs.exit_code }} (0=성공)
+
+            ## 지시사항
+            1. cat test-output-r3.txt 확인
+            2. cat tdd-feedback.md 누적 피드백 확인
+            3. 필요시 테스트 보완
+            4. tdd-feedback.md 에 Round 3 최종 결과 추가
+            5. tdd-verdict.txt 최종 판정: "PASS" 또는 "FAIL: <이유>"
+            6. git add src/test/ tdd-feedback.md tdd-verdict.txt && \
+               git commit -m "test: [R3] 최종 검증 결과" --allow-empty
+
+      - name: "[R3] Check"
+        if: steps.check_r1.outputs.passed != 'true' && steps.check_r2.outputs.passed != 'true'
+        id: check_r3
+        run: |
+          verdict=$(head -1 tdd-verdict.txt 2>/dev/null || echo "FAIL: verdict 파일 없음")
+          echo "verdict=${verdict}" >> $GITHUB_OUTPUT
+          if [[ "${verdict}" == "PASS" ]]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ════════════════════════════════════════════════════════════════
+      # 최종 판정
+      # ════════════════════════════════════════════════════════════════
+
+      - name: Determine Final Result
+        if: always()
+        id: final
+        run: |
+          r1="${{ steps.check_r1.outputs.passed }}"
+          r2="${{ steps.check_r2.outputs.passed }}"
+          r3="${{ steps.check_r3.outputs.passed }}"
+
+          if [[ "$r1" == "true" || "$r2" == "true" || "$r3" == "true" ]]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            rounds=1
+            [[ "$r1" != "true" && "$r2" == "true" ]] && rounds=2
+            [[ "$r1" != "true" && "$r2" != "true" && "$r3" == "true" ]] && rounds=3
+            echo "rounds=${rounds}" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "rounds=0" >> $GITHUB_OUTPUT
+          fi
+
+      # ════════════════════════════════════════════════════════════════
+      # 통과: 브랜치 푸시 & PR 생성
+      # ════════════════════════════════════════════════════════════════
+
+      - name: Push Branch
+        if: steps.final.outputs.passed == 'true'
+        run: git push origin ${{ inputs.branch_name }}
+
+      - name: Create PR
+        if: steps.final.outputs.passed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 이미 PR이 있으면 스킵
+          existing=$(gh pr list --head "${{ inputs.branch_name }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [[ -n "$existing" ]]; then
+            echo "PR #${existing} 이미 존재합니다."
+            exit 0
+          fi
+
+          ROUNDS=${{ steps.final.outputs.rounds }}
+          R1="${{ steps.check_r1.outputs.verdict }}"
+          R2="${{ steps.check_r2.outputs.verdict }}"
+          R3="${{ steps.check_r3.outputs.verdict }}"
+          FEEDBACK=$(cat tdd-feedback.md 2>/dev/null | head -100 || echo "N/A")
+
+          gh pr create \
+            --title "feat: ${{ inputs.feature_description }}" \
+            --body "## 🤖 Multi-Agent TDD 결과
+
+          **브랜치**: \`${{ inputs.branch_name }}\`
+          **소요 라운드**: ${ROUNDS}/3
+
+          ### 라운드별 결과
+          | 라운드 | 판정 |
+          |--------|------|
+          | Round 1 | ${R1:-'-'} |
+          | Round 2 | ${R2:-'-'} |
+          | Round 3 | ${R3:-'-'} |
+
+          ### 검증 피드백 요약
+          \`\`\`
+          ${FEEDBACK}
+          \`\`\`
+
+          ---
+          🤖 _Developer Agent(구현) + Validator Agent(테스트/리뷰) 협업으로 자동 생성_" \
+            --base main \
+            --head "${{ inputs.branch_name }}"
+
+      # ════════════════════════════════════════════════════════════════
+      # 실패: 3라운드 모두 미통과
+      # ════════════════════════════════════════════════════════════════
+
+      - name: Fail — All Rounds Failed
+        if: steps.final.outputs.passed == 'false'
+        run: |
+          echo "❌ 3라운드 모두 통과하지 못했습니다. 수동 검토가 필요합니다."
+          echo ""
+          echo "=== 누적 피드백 ==="
+          cat tdd-feedback.md 2>/dev/null || echo "피드백 파일 없음"
+          exit 1
