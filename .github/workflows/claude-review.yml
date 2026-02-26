@@ -37,7 +37,7 @@ jobs:
           claude_args: "--max-turns 5"
           show_full_output: "true"
           prompt: |
-            이 PR을 아래 관점에서 한국어로 코드리뷰 해줘.
+            이 PR을 아래 관점에서 한국어로 코드리뷰하고, 리뷰 결과를 PR 댓글로 작성해줘.
 
             ## 프로젝트 컨텍스트
             - Java 17 + Spring Boot 3.2 기반 병원 예약 API
@@ -57,6 +57,9 @@ jobs:
             - 심각도별로 구분: 🔴 필수 수정 / 🟡 개선 권장 / 🟢 좋은 점
             - 각 항목에 파일명과 라인 번호 포함
             - 수정이 필요한 경우 수정 예시 코드 제시
+
+            ## 중요
+            리뷰 완료 후 반드시 GitHub PR에 댓글로 결과를 게시해줘.
 
   # ── On-demand 리뷰: 댓글에서 @claude 멘션 시 ─────────────────────────
   on-demand-review:
