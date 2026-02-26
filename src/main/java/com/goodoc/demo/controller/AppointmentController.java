@@ -3,6 +3,7 @@ package com.goodoc.demo.controller;
 import com.goodoc.demo.dto.AppointmentRequest;
 import com.goodoc.demo.dto.AppointmentRescheduleRequest;
 import com.goodoc.demo.dto.AppointmentResponse;
+import com.goodoc.demo.dto.CancelRequest;
 import com.goodoc.demo.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -55,8 +56,10 @@ public class AppointmentController {
 
     // 예약 취소
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable Long id) {
-        AppointmentResponse response = appointmentService.cancelAppointment(id, null);
+    public ResponseEntity<AppointmentResponse> cancelAppointment(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelRequest request) {
+        AppointmentResponse response = appointmentService.cancelAppointment(id, request.getReason());
         return ResponseEntity.ok(response);
     }
 }
