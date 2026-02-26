@@ -24,8 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
       - uses: anthropics/claude-code-action@v1
         with:
+          use_bedrock: "true"
           claude_args: "--max-turns 5"
           prompt: |
             이 PR을 아래 관점에서 한국어로 코드리뷰 해줘.
@@ -63,7 +70,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
       - uses: anthropics/claude-code-action@v1
         with:
+          use_bedrock: "true"
           trigger_phrase: "@claude"
           claude_args: "--max-turns 10"
