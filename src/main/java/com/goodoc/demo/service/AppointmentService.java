@@ -62,6 +62,19 @@ public class AppointmentService {
     }
 
     @Transactional
+    public AppointmentResponse confirmAppointment(Long id) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다. id=" + id));
+
+        if (appointment.getStatus() != Appointment.AppointmentStatus.PENDING) {
+            throw new IllegalStateException("이미 처리된 예약입니다. id=" + id);
+        }
+
+        appointment.setStatus(Appointment.AppointmentStatus.CONFIRMED);
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
     public AppointmentResponse cancelAppointment(Long id, String reason) {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다. id=" + id));

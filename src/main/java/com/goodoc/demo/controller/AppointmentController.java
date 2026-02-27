@@ -54,6 +54,13 @@ public class AppointmentController {
         return ResponseEntity.ok(response);
     }
 
+    // 예약 확정
+    @PatchMapping("/{id}/confirm")
+    public ResponseEntity<AppointmentResponse> confirmAppointment(@PathVariable Long id) {
+        AppointmentResponse response = appointmentService.confirmAppointment(id);
+        return ResponseEntity.ok(response);
+    }
+
     // 예약 취소
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<AppointmentResponse> cancelAppointment(
